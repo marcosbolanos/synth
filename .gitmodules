@@ -1,0 +1,3 @@
+[submodule "src/vital"]
+	path = src/vital
+	url = git@github.com:marcosbolanos/vital.git
