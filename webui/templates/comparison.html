@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+  <p class="details">{{ run.title }} · {{ run.created_at.strftime('%d %b %Y at %H:%M:%S') }}</p>
+  {% for comparison in comparisons %}
+    <section class="pair">
+      <h2>{{ comparison.name }}</h2>
+      <div class="comparison">
+        <article><h3>Original</h3><audio controls preload="metadata" src="{{ comparison.original.url }}"></audio></article>
+        <article><h3>DAC reconstructed</h3><audio controls preload="metadata" src="{{ comparison.reconstructed.url }}"></audio></article>
+      </div>
+    </section>
+  {% else %}<p>Reconstruction is still in progress.</p>{% endfor %}
+{% endblock %}

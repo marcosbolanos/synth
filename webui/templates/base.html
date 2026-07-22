@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} · Synth outputs</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar">
+      <div class="sidebar-head"><strong>Sections</strong><button class="close" data-sidebar-toggle>×</button></div>
+      <nav class="featured">
+        <a href="/dac" class="{{ 'active' if active_path == '/dac' else '' }}"><span>Latest DAC comparison</span><time>Original ↔ reconstructed</time></a>
+        <a href="/midtempo" class="{{ 'active' if active_path == '/midtempo' else '' }}"><span>Midtempo pack</span><time>16 Vital presets</time></a>
+      </nav>
+      <div class="nav-label">Runs · newest first</div>
+      <nav>
+        {% for item in runs %}
+          <a href="{{ item.url }}" class="{{ 'active' if active_path == item.url else '' }}">
+            <span>{{ item.title }}</span>
+            <time>{{ item.created_at.strftime('%d %b %Y · %H:%M:%S') }}{{ ' · DAC comparison' if item.is_comparison else '' }}</time>
+          </a>
+        {% endfor %}
+      </nav>
+    </aside>
+    <main>
+      <header><button class="menu" data-sidebar-toggle>☰</button><h1>{{ title }}</h1></header>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

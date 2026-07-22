@@ -28,7 +28,7 @@ must be bound to an exact Tailscale IP so it is not exposed on LAN or public
 interfaces:
 
 ```bash
-uv run scripts/serve_outputs.py --host 100.119.77.112 --port 8765
+uv run python -m webui.app --host 100.119.77.112 --port 8765
 ```
 
 ## External Vital presets

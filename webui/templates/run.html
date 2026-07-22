@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+  {% for file in run.files %}
+    <article>
+      <a class="filename" href="{{ file.url }}">{{ file.path.name }}</a>
+      <div class="details">{{ file.display_size }} · {{ file.modified_at.strftime('%H:%M:%S') }}</div>
+      {% if file.kind == 'audio' %}<audio controls preload="metadata" src="{{ file.url }}"></audio>{% endif %}
+      {% if file.kind == 'image' %}<a href="{{ file.url }}"><img loading="lazy" src="{{ file.url }}"></a>{% endif %}
+      {% if file.kind == 'html' %}<a class="button" href="{{ file.url }}">Open HTML</a>{% endif %}
+    </article>
+  {% else %}<p>This run has no files.</p>{% endfor %}
+{% endblock %}

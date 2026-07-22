@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+  {% for preset in presets %}
+    <article>
+      <div class="filename">{{ '%02d'|format(preset.index) }}. {{ preset.preset_name }}<span class="badge">{{ preset.preset_style }}</span></div>
+      <div class="details">{{ preset.author }} · sustained C2 · 6 seconds</div>
+      <audio controls preload="metadata" src="{{ preset.audio_url }}"></audio>
+      <p class="comments">{{ preset.comments }}</p>
+    </article>
+  {% endfor %}
+{% endblock %}

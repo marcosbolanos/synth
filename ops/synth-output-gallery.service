@@ -5,7 +5,7 @@ After=network-online.target tailscaled.service
 [Service]
 Type=simple
 WorkingDirectory=/home/marcos/code/synth
-ExecStart=/home/marcos/.local/bin/uv run scripts/serve_outputs.py --host 100.119.77.112 --port 8765
+ExecStart=/home/marcos/.local/bin/uv run python -m webui.app --host 100.119.77.112 --port 8765
 Restart=on-failure
 RestartSec=3
 
