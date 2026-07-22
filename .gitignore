@@ -1,3 +1,12 @@
+# local files
+local/
+
+# data
+data/**
+data/**/*
+!data/.gitkeep
+!data/**/.gitkeep
+
 # Python-generated files
 __pycache__/
 *.py[oc]
