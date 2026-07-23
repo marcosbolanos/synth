@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% macro comparison_section(title, items) %}
+  <h2>{{ title }} <span class="badge">{{ items|length }}</span></h2>
+  {% for item in items %}
+    <section class="pair">
+      <h3>{{ item.preset_name }} <span class="badge">{{ item.family }}</span></h3>
+      <div class="details">{{ item.pack }} · baseline {{ '%.3f'|format(item.baseline_distance) }} · four {{ '%.3f'|format(item.four_variant_distance) }} · stream {{ '%.3f'|format(item.stream_distance) }}</div>
+      <div class="comparison comparison-four">
+        <article><h3>Input</h3><audio controls preload="metadata" src="{{ item.input_url }}"></audio></article>
+        <article><h3>Baseline</h3><audio controls preload="metadata" src="{{ item.baseline_output_url }}"></audio><a class="button preset-link" href="{{ item.baseline_preset_url }}">Preset</a></article>
+        <article><h3>Four variants</h3><audio controls preload="metadata" src="{{ item.four_variant_output_url }}"></audio><a class="button preset-link" href="{{ item.four_variant_preset_url }}">Preset</a></article>
+        <article><h3>Diverse stream</h3><audio controls preload="metadata" src="{{ item.stream_output_url }}"></audio><a class="button preset-link" href="{{ item.stream_preset_url }}">Preset</a></article>
+      </div>
+    </section>
+  {% endfor %}
+{% endmacro %}
+{% block content %}
+  <section class="summary-grid">
+    <article><div class="details">Stream examples consumed</div><div class="metric">{{ '{:,}'.format(report.processed_stream_examples) }}</div></article>
+    <article><div class="details">Rejected silent renders</div><div class="metric">{{ report.rejected_stream_examples }} / {{ '{:,}'.format(report.generated_stream_examples) }}</div></article>
+    <article><div class="details">Optimizer steps</div><div class="metric">{{ '{:,}'.format(report.optimizer_steps) }}</div></article>
+    <article><div class="details">Training time</div><div class="metric">{{ '%.1f'|format(report.training_seconds / 60) }} min</div></article>
+    <article><div class="details">Model parameters</div><div class="metric">{{ '%.1f'|format(report.model_parameters / 1000000) }}M</div></article>
+    <article><div class="details">Original replay</div><div class="metric">{{ '%.0f'|format(report.replay_fraction * 100) }}%</div></article>
+    <article><div class="details">Mean controls changed</div><div class="metric">{{ '%.1f'|format(report.mean_changed_control_count) }}</div></article>
+    <article><div class="details">Baseline test loss</div><div class="metric">{{ '%.4f'|format(report.baseline_best_test_sound_loss) }}</div></article>
+    <article><div class="details">Four-variant test loss</div><div class="metric">{{ '%.4f'|format(report.four_variant_best_test_sound_loss) }}</div></article>
+    <article><div class="details">Stream test loss</div><div class="metric">{{ '%.4f'|format(report.stream_best_test_sound_loss) }}</div></article>
+    <article><div class="details">Four-variant test render</div><div class="metric">{{ '%.4f'|format(report.four_variant_test_rendered_distance) }}</div></article>
+    <article><div class="details">Stream test render</div><div class="metric">{{ '%.4f'|format(report.stream_test_rendered_distance) }}</div></article>
+    <article><div class="details">Stream test wins</div><div class="metric">{{ report.stream_test_wins_over_four_variant }} / 10</div></article>
+  </section>
+  <div class="plot-grid">{% for plot in plots %}<article><a href="{{ plot.url }}"><img src="{{ plot.url }}" alt="Streaming scale report plot"></a></article>{% endfor %}</div>
+  <h2>Variation modes</h2>
+  <table><thead><tr><th>Mode</th><th>Examples</th></tr></thead><tbody>{% for mode, count in report.mode_counts.items() %}<tr><td>{{ mode }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody></table>
+  {{ comparison_section('Untouched test comparisons', test_comparisons) }}
+  {{ comparison_section('Train comparisons', train_comparisons) }}
+{% endblock %}

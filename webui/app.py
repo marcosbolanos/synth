@@ -102,9 +102,21 @@ class AudioComparison:
 
 
 def output_file(path: Path) -> OutputFile:
-    stat = path.stat()
+    local_path = path
+    if path.is_absolute() and not path.is_relative_to(REPO_ROOT):
+        output_marker = ("data", "outputs")
+        marker_index = next(
+            index
+            for index in range(len(path.parts) - 1)
+            if path.parts[index : index + 2] == output_marker
+        )
+        local_path = REPO_ROOT.joinpath(*path.parts[marker_index:])
+    local_path = local_path.resolve(strict=True)
+    if not local_path.is_relative_to(OUTPUT_ROOT.resolve()):
+        raise ValueError(f"Expected an output file, received {local_path}")
+    stat = local_path.stat()
     return OutputFile(
-        path=path,
+        path=local_path,
         size_bytes=stat.st_size,
         modified_at=datetime.fromtimestamp(stat.st_mtime).astimezone(),
     )
@@ -233,6 +245,229 @@ def midtempo_gallery(request: Request) -> HTMLResponse:
         request=request,
         name="midtempo.html",
         context=page_context(request, "/midtempo", title="BLA Midtempo for Vital", presets=presets),
+    )
+
+
+def latest_manifest(pattern: str) -> Path | None:
+    manifests = tuple(OUTPUT_ROOT.glob(pattern))
+    return max(manifests, key=lambda path: path.stat().st_mtime) if manifests else None
+
+
+@app.get("/vital-investigation", response_class=HTMLResponse)
+def vital_investigation(request: Request) -> HTMLResponse:
+    manifest_path = latest_manifest(
+        "investigate_vital_architecture_v1_*/files/architecture_investigation.json"
+    )
+    if manifest_path is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="empty.html",
+            context=page_context(
+                request,
+                "/vital-investigation",
+                title="Vital architecture investigation",
+                message="No completed architecture investigation exists yet.",
+            ),
+        )
+    report = json.loads(manifest_path.read_text(encoding="utf-8"))
+    plot = output_file(manifest_path.parent / "audio_encoding_comparison.png")
+    return templates.TemplateResponse(
+        request=request,
+        name="vital_investigation.html",
+        context=page_context(
+            request,
+            "/vital-investigation",
+            title="Vital architecture investigation",
+            report=report,
+            plot=plot,
+        ),
+    )
+
+
+@app.get("/vital-augmentation", response_class=HTMLResponse)
+def vital_augmentation(request: Request) -> HTMLResponse:
+    manifest_path = latest_manifest(
+        "compare_vital_augmentation_v1_*/files/augmentation_demo.json"
+    )
+    if manifest_path is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="empty.html",
+            context=page_context(
+                request,
+                "/vital-augmentation",
+                title="Vital augmentation chapter",
+                message="No completed Vital augmentation comparison exists yet.",
+            ),
+        )
+    report = json.loads(manifest_path.read_text(encoding="utf-8"))
+    comparisons = json.loads(
+        (manifest_path.parent / report["comparisons"]).read_text(encoding="utf-8")
+    )
+    prepared = tuple(
+        {
+            **item,
+            "input_url": output_file(Path(item["input_audio"])).url,
+            "baseline_output_url": output_file(Path(item["baseline_output_audio"])).url,
+            "augmented_output_url": output_file(Path(item["augmented_output_audio"])).url,
+            "baseline_preset_url": output_file(Path(item["baseline_preset"])).url,
+            "augmented_preset_url": output_file(Path(item["augmented_preset"])).url,
+        }
+        for item in comparisons
+    )
+    plots = tuple(output_file(manifest_path.parent / name) for name in report["plots"])
+    return templates.TemplateResponse(
+        request=request,
+        name="vital_augmentation.html",
+        context=page_context(
+            request,
+            "/vital-augmentation",
+            title="Vital augmentation · baseline vs four variants",
+            report=report,
+            plots=plots,
+            train_comparisons=tuple(item for item in prepared if item["split"] != "test"),
+            test_comparisons=tuple(item for item in prepared if item["split"] == "test"),
+        ),
+    )
+
+
+@app.get("/vital-stream-scale", response_class=HTMLResponse)
+def vital_stream_scale(request: Request) -> HTMLResponse:
+    manifest_path = latest_manifest(
+        "compare_vital_stream_scale_v1_*/files/stream_scale_demo.json"
+    )
+    if manifest_path is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="empty.html",
+            context=page_context(
+                request,
+                "/vital-stream-scale",
+                title="Vital streaming scale chapter",
+                message="The diverse streaming augmentation experiment is still running.",
+            ),
+        )
+    report = json.loads(manifest_path.read_text(encoding="utf-8"))
+    comparisons = json.loads(
+        (manifest_path.parent / report["comparisons"]).read_text(encoding="utf-8")
+    )
+    prepared = tuple(
+        {
+            **item,
+            "input_url": output_file(Path(item["input_audio"])).url,
+            **{
+                f"{name}_output_url": output_file(
+                    Path(item[f"{name}_output_audio"])
+                ).url
+                for name in ("baseline", "four_variant", "stream")
+            },
+            **{
+                f"{name}_preset_url": output_file(
+                    Path(item[f"{name}_preset"])
+                ).url
+                for name in ("baseline", "four_variant", "stream")
+            },
+        }
+        for item in comparisons
+    )
+    plots = tuple(output_file(manifest_path.parent / name) for name in report["plots"])
+    return templates.TemplateResponse(
+        request=request,
+        name="vital_stream_scale.html",
+        context=page_context(
+            request,
+            "/vital-stream-scale",
+            title="Vital streaming scale · diversified synthetic pool",
+            report=report,
+            plots=plots,
+            train_comparisons=tuple(item for item in prepared if item["split"] != "test"),
+            test_comparisons=tuple(item for item in prepared if item["split"] == "test"),
+        ),
+    )
+
+
+def training_report_path(run_name: str | None = None) -> Path | None:
+    if run_name is None:
+        return latest_manifest("train_vital_transformer_v1_*/files/training_report.json")
+    run = output_run(run_name)
+    candidate = run.path / "files" / "training_report.json"
+    return candidate if candidate.is_file() else None
+
+
+def vital_training_page(
+    request: Request,
+    manifest_path: Path,
+    active_path: str,
+) -> HTMLResponse:
+    report = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if report["status"] != "complete":
+        return templates.TemplateResponse(
+            request=request,
+            name="empty.html",
+            context=page_context(
+                request,
+                active_path,
+                title="Vital sound-to-preset transformer",
+                message=f"Training run status: {report['status'].replace('_', ' ')}.",
+            ),
+        )
+    comparisons = json.loads(
+        (manifest_path.parent / report["comparisons"]).read_text(encoding="utf-8")
+    )
+    prepared = []
+    for comparison in comparisons:
+        prepared.append(
+            {
+                **comparison,
+                "input_url": output_file(manifest_path.parent / comparison["input_audio"]).url,
+                "output_url": output_file(manifest_path.parent / comparison["output_audio"]).url,
+                "preset_url": output_file(
+                    manifest_path.parent / comparison["predicted_preset"]
+                ).url,
+            }
+        )
+    plots = tuple(output_file(manifest_path.parent / name) for name in report["plots"])
+    return templates.TemplateResponse(
+        request=request,
+        name="vital_training.html",
+        context=page_context(
+            request,
+            active_path,
+            title="Vital sound-to-preset transformer",
+            report=report,
+            plots=plots,
+            train_comparisons=tuple(item for item in prepared if item["split"] != "test"),
+            test_comparisons=tuple(item for item in prepared if item["split"] == "test"),
+        ),
+    )
+
+
+@app.get("/vital-transformer", response_class=HTMLResponse)
+def latest_vital_training(request: Request) -> HTMLResponse:
+    manifest_path = training_report_path()
+    if manifest_path is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="empty.html",
+            context=page_context(
+                request,
+                "/vital-transformer",
+                title="Vital sound-to-preset transformer",
+                message="No completed Vital transformer training run exists yet.",
+            ),
+        )
+    return vital_training_page(request, manifest_path, "/vital-transformer")
+
+
+@app.get("/vital-transformer/{run_name}", response_class=HTMLResponse)
+def historical_vital_training(request: Request, run_name: str) -> HTMLResponse:
+    manifest_path = training_report_path(run_name)
+    if manifest_path is None:
+        raise HTTPException(status_code=404, detail="Vital training report not found")
+    return vital_training_page(
+        request,
+        manifest_path,
+        f"/vital-transformer/{quote(run_name)}",
     )
 
 

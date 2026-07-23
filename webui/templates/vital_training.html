@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% macro comparison_section(title, items) %}
+  <h2>{{ title }} <span class="badge">{{ items|length }}</span></h2>
+  {% for item in items %}
+    <section class="pair">
+      <h3>{{ item.preset_name }} <span class="badge">{{ item.family }}</span></h3>
+      <div class="details">{{ item.pack }} · template {{ item.template_sha256[:10] }}</div>
+      <div class="comparison">
+        <article><h3>Input preset</h3><audio controls preload="metadata" src="{{ item.input_url }}"></audio></article>
+        <article><h3>Predicted preset</h3><audio controls preload="metadata" src="{{ item.output_url }}"></audio><a class="button preset-link" href="{{ item.preset_url }}">Preset</a></article>
+      </div>
+    </section>
+  {% endfor %}
+{% endmacro %}
+{% block content %}
+  <section class="summary-grid">
+    <article><div class="details">Audio encoding</div><div class="metric">{{ report.feature_name }}</div></article>
+    <article><div class="details">Model parameters</div><div class="metric">{{ '{:,}'.format(report.model_parameters) }}</div></article>
+    <article><div class="details">Best test sound loss</div><div class="metric">{{ '%.5f'|format(report.best_test_sound_loss) }}</div></article>
+    <article><div class="details">GPU UUID</div><div class="metric small">{{ report.gpu_uuid }}</div></article>
+    <article><div class="details">Preference rounds</div><div class="metric">{{ report.preference_rounds }}</div></article>
+    <article><div class="details">Train rendered distance</div><div class="metric">{{ '%.4f'|format(report.mean_train_rendered_sound_distance) }}</div></article>
+    <article><div class="details">Test rendered distance</div><div class="metric">{{ '%.4f'|format(report.mean_test_rendered_sound_distance) }}</div></article>
+    <article><div class="details">Examples</div><div class="metric">{{ report.training_examples }} / {{ report.test_examples }}</div></article>
+  </section>
+  <div class="plot-grid">{% for plot in plots %}<article><a href="{{ plot.url }}"><img src="{{ plot.url }}" alt="Training plot"></a></article>{% endfor %}</div>
+  {{ comparison_section('Test comparisons', test_comparisons) }}
+  {{ comparison_section('Train comparisons', train_comparisons) }}
+{% endblock %}

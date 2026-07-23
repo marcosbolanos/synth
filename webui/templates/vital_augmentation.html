@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% macro comparison_section(title, items) %}
+  <h2>{{ title }} <span class="badge">{{ items|length }}</span></h2>
+  {% for item in items %}
+    <section class="pair">
+      <h3>{{ item.preset_name }} <span class="badge">{{ item.family }}</span></h3>
+      <div class="details">{{ item.pack }} · baseline {{ '%.3f'|format(item.baseline_distance) }} · augmented {{ '%.3f'|format(item.augmented_distance) }}</div>
+      <div class="comparison comparison-three">
+        <article><h3>Input</h3><audio controls preload="metadata" src="{{ item.input_url }}"></audio></article>
+        <article><h3>Baseline</h3><audio controls preload="metadata" src="{{ item.baseline_output_url }}"></audio><a class="button preset-link" href="{{ item.baseline_preset_url }}">Preset</a></article>
+        <article><h3>Augmented</h3><audio controls preload="metadata" src="{{ item.augmented_output_url }}"></audio><a class="button preset-link" href="{{ item.augmented_preset_url }}">Preset</a></article>
+      </div>
+    </section>
+  {% endfor %}
+{% endmacro %}
+{% block content %}
+  <section class="summary-grid">
+    <article><div class="details">Original training presets</div><div class="metric">{{ report.original_training_examples }}</div></article>
+    <article><div class="details">Generated variations</div><div class="metric">{{ report.augmented_examples }}</div></article>
+    <article><div class="details">Variants per preset</div><div class="metric">{{ report.variants_per_preset }}</div></article>
+    <article><div class="details">Mean controls changed</div><div class="metric">{{ '%.1f'|format(report.mean_changed_control_count) }}</div></article>
+    <article><div class="details">Baseline test loss</div><div class="metric">{{ '%.4f'|format(report.baseline_best_test_sound_loss) }}</div></article>
+    <article><div class="details">Augmented test loss</div><div class="metric">{{ '%.4f'|format(report.augmented_best_test_sound_loss) }}</div></article>
+    <article><div class="details">Baseline test render</div><div class="metric">{{ '%.4f'|format(report.baseline_test_rendered_distance) }}</div></article>
+    <article><div class="details">Augmented test render</div><div class="metric">{{ '%.4f'|format(report.augmented_test_rendered_distance) }}</div></article>
+    <article><div class="details">Augmented test wins</div><div class="metric">{{ report.augmented_test_wins }} / 10</div></article>
+    <article><div class="details">Augmented train wins</div><div class="metric">{{ report.augmented_train_wins }} / 34</div></article>
+  </section>
+  <div class="plot-grid">{% for plot in plots %}<article><a href="{{ plot.url }}"><img src="{{ plot.url }}" alt="Augmentation report plot"></a></article>{% endfor %}</div>
+  {{ comparison_section('Untouched test comparisons', test_comparisons) }}
+  {{ comparison_section('Train comparisons', train_comparisons) }}
+{% endblock %}

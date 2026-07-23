@@ -11,6 +11,10 @@
     <aside id="sidebar">
       <div class="sidebar-head"><strong>Sections</strong><button class="close" data-sidebar-toggle>×</button></div>
       <nav class="featured">
+        <a href="/vital-stream-scale" class="{{ 'active' if active_path == '/vital-stream-scale' else '' }}"><span>Streaming scale chapter</span><time>Four variants ↔ diverse stream</time></a>
+        <a href="/vital-augmentation" class="{{ 'active' if active_path == '/vital-augmentation' else '' }}"><span>Augmentation chapter</span><time>Baseline ↔ four-variant training</time></a>
+        <a href="/vital-transformer" class="{{ 'active' if active_path == '/vital-transformer' else '' }}"><span>Vital transformer</span><time>Input ↔ generated preset</time></a>
+        <a href="/vital-investigation" class="{{ 'active' if active_path == '/vital-investigation' else '' }}"><span>Architecture investigation</span><time>Audio and preset representations</time></a>
         <a href="/dac" class="{{ 'active' if active_path == '/dac' else '' }}"><span>Latest DAC comparison</span><time>Original ↔ reconstructed</time></a>
         <a href="/midtempo" class="{{ 'active' if active_path == '/midtempo' else '' }}"><span>Midtempo pack</span><time>16 Vital presets</time></a>
       </nav>
