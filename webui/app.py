@@ -408,6 +408,62 @@ def vital_stream_scale(request: Request) -> HTMLResponse:
     )
 
 
+@app.get("/vital-refiner", response_class=HTMLResponse)
+def vital_refiner(request: Request) -> HTMLResponse:
+    report_path = latest_manifest(
+        "evaluate_vital_refiner_v1_*/files/refiner_report.json"
+    )
+    if report_path is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="empty.html",
+            context=page_context(
+                request,
+                "/vital-refiner",
+                title="Vital latent refiner",
+                message="No completed bounded-search refiner evaluation exists yet.",
+            ),
+        )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    comparisons_path = output_reference(
+        report_path.parent, str(report["comparisons"])
+    )
+    comparisons = json.loads(comparisons_path.read_text(encoding="utf-8"))
+    prepared = tuple(
+        {
+            **item,
+            **{
+                f"{name}_url": output_file(Path(item[f"{name}_audio"])).url
+                for name in ("target", "seed", "old", "cem", "refiner")
+            },
+            "cem_preset_url": output_file(Path(item["cem_preset"])).url,
+            "refiner_preset_url": output_file(Path(item["refiner_preset"])).url,
+        }
+        for item in comparisons
+    )
+    plots = tuple(
+        output_file(output_reference(report_path.parent, str(name)))
+        for name in report["plots"]
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="vital_refiner.html",
+        context=page_context(
+            request,
+            "/vital-refiner",
+            title="Vital latent refiner · bounded iterative search",
+            report=report,
+            plots=plots,
+            train_comparisons=tuple(
+                item for item in prepared if item["split"] != "test"
+            ),
+            test_comparisons=tuple(
+                item for item in prepared if item["split"] == "test"
+            ),
+        ),
+    )
+
+
 def training_report_path(run_name: str | None = None) -> Path | None:
     if run_name is None:
         return latest_manifest("train_vital_transformer_v1_*/files/training_report.json")

@@ -27,6 +27,7 @@ img { display: block; max-width: 100%; max-height: 32rem; border-radius: .4rem; 
 .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .comparison-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .comparison-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.comparison-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .comparison h3 { font-size: .9rem; color: #aab2c0; margin: 0 0 .55rem; }
 .comparison article { margin: 0; }
 .pair { margin: 1rem 0 1.5rem; }
@@ -41,6 +42,9 @@ img { display: block; max-width: 100%; max-height: 32rem; border-radius: .4rem; 
 table { width: 100%; border-collapse: collapse; background: #1c2028; }
 th, td { padding: .65rem; border: 1px solid #303642; text-align: left; }
 th { color: #aab2c0; }
+@media (max-width: 1100px) {
+  .comparison-five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 760px) {
   .layout { display: block; }
   aside { position: fixed; z-index: 10; width: min(88vw, 20rem); transform: translateX(-105%); transition: transform .2s ease; box-shadow: 1rem 0 2rem #0008; }
