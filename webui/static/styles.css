@@ -25,10 +25,22 @@ audio { display: block; width: 100%; }
 img { display: block; max-width: 100%; max-height: 32rem; border-radius: .4rem; }
 .button { display: inline-block; color: white; background: #315c91; border-radius: .4rem; padding: .5rem .7rem; text-decoration: none; }
 .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.comparison-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.comparison-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .comparison h3 { font-size: .9rem; color: #aab2c0; margin: 0 0 .55rem; }
 .comparison article { margin: 0; }
 .pair { margin: 1rem 0 1.5rem; }
 .pair h2 { font-size: 1.05rem; margin: 0 0 .65rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .8rem; }
+.summary-grid article { margin: 0; }
+.metric { font-size: 1.35rem; font-weight: 700; }
+.metric.small { font-size: .9rem; overflow-wrap: anywhere; }
+.plot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: .8rem; }
+.plot-grid article { margin: 0; }
+.preset-link { margin-top: .7rem; }
+table { width: 100%; border-collapse: collapse; background: #1c2028; }
+th, td { padding: .65rem; border: 1px solid #303642; text-align: left; }
+th { color: #aab2c0; }
 @media (max-width: 760px) {
   .layout { display: block; }
   aside { position: fixed; z-index: 10; width: min(88vw, 20rem); transform: translateX(-105%); transition: transform .2s ease; box-shadow: 1rem 0 2rem #0008; }

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="summary-grid">
+    <article><div class="details">Selected audio encoding</div><div class="metric">{{ report.recommendation.audio_encoding }}</div></article>
+    <article><div class="details">Preset representation</div><div class="metric small">{{ report.recommendation.preset_representation }}</div></article>
+    <article><div class="details">Parameter target</div><div class="metric">{{ '{:,}'.format(report.recommendation.model_parameter_target) }}</div></article>
+  </section>
+  <article><a href="{{ plot.url }}"><img src="{{ plot.url }}" alt="Audio encoding comparison"></a></article>
+  <h2>Input encoding results</h2>
+  <table>
+    <thead><tr><th>Encoding</th><th>Input dimension</th><th>Sound distance</th><th>Time</th></tr></thead>
+    <tbody>{% for name, result in report.input_results.items() %}<tr><td>{{ name }}</td><td>{{ result.raw_dimension }}</td><td>{{ '%.5f'|format(result.combined_sound_distance) }}</td><td>{{ '%.1fs'|format(result.seconds) }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <p class="comments">{{ report.recommendation.reason }}</p>
+{% endblock %}

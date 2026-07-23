@@ -145,16 +145,20 @@ class VitalRenderer:
         note: int,
         duration_seconds: float,
         preset: VitalPreset,
+        *,
+        allow_silence: bool = False,
+        verify_loaded_preset: bool = True,
     ) -> NDArray[np.float32]:
         request = VitalNote(number=note, duration_seconds=duration_seconds)
         self._plugin.raw_state = _vst3_raw_state(preset.to_json_bytes())
 
-        loaded_preset = self.current_preset
-        if loaded_preset.preset_name != preset.preset_name:
-            raise ValueError(
-                f"Vital loaded {loaded_preset.preset_name!r}, "
-                f"expected {preset.preset_name!r}"
-            )
+        if verify_loaded_preset:
+            loaded_preset = self.current_preset
+            if (loaded_preset.preset_name or "") != (preset.preset_name or ""):
+                raise ValueError(
+                    f"Vital loaded {loaded_preset.preset_name!r}, "
+                    f"expected {preset.preset_name!r}"
+                )
 
         render_duration = (
             request.duration_seconds + self.config.tail_duration_seconds
@@ -190,6 +194,6 @@ class VitalRenderer:
             raise TypeError(f"Expected float32 audio, received {audio.dtype}")
         if not np.isfinite(audio).all():
             raise ValueError(f"Preset produced non-finite audio: {preset.preset_name}")
-        if float(np.max(np.abs(audio))) <= 0.0:
+        if not allow_silence and float(np.max(np.abs(audio))) <= 0.0:
             raise ValueError(f"Preset produced silent audio: {preset.preset_name}")
         return audio

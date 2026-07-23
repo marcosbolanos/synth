@@ -8,6 +8,13 @@
 The `src/vital` submodule is retained only as reference material for inspecting
 Vital's preset and state formats. It is not built or executed by this project.
 
+The supplied Vital 1.6.4 binary requires a newer C runtime than this host. Install
+the checksum-pinned user-local runtime and VST3 without sudo:
+
+```bash
+uv run scripts/setup_vital_runtime.py
+```
+
 ## Render the official Vital VST3 with Pedalboard
 
 Install the official native Linux Vital VST3, then render its init patch as a
@@ -73,3 +80,51 @@ modified.to_file(Path("modified.vital"))
 renderer = VitalRenderer(Path("/home/marcos/.vst3/Vital.vst3"))
 audio = renderer.render_vital_audio(note=36, duration_seconds=4.0, preset=modified)
 ```
+
+## Sound-to-preset experiment
+
+The experiment uses C2 held for two seconds plus a two-second tail. Architecture
+selection compares DAC, log-mel, multi-resolution STFT, and waveform encodings,
+then trains only on the A6000 selected by its NVIDIA UUID.
+
+```bash
+uv run scripts/investigate_vital_corpus.py --preset-root "data/external/Vital Presets/Jeks Vital Presets/files"
+uv run scripts/build_vital_dataset.py --corpus-jsonl /path/to/corpus.jsonl --vital-vst3 "$HOME/.vst3/Vital.vst3"
+uv run scripts/extract_vital_audio_features.py --dataset-dir /path/to/dataset/files
+uv run scripts/run_architecture_investigation.py --dataset-dir /path/to/dataset/files --corpus-investigation /path/to/investigation.json
+uv run scripts/train_vital_transformer.py --dataset-dir /path/to/dataset/files --architecture-report /path/to/architecture_investigation.json --vital-vst3 "$HOME/.vst3/Vital.vst3"
+uv run scripts/preference_finetune_vital.py --dataset-dir /path/to/dataset/files --training-dir /path/to/training/files --vital-vst3 "$HOME/.vst3/Vital.vst3"
+uv run scripts/augment_vital_dataset.py --dataset-dir /path/to/dataset/files --vital-vst3 "$HOME/.vst3/Vital.vst3"
+uv run scripts/extract_vital_audio_features.py --dataset-dir /path/to/augmented/files --features log_mel
+uv run scripts/train_vital_transformer.py --dataset-dir /path/to/augmented/files --architecture-report /path/to/architecture_investigation.json --vital-vst3 "$HOME/.vst3/Vital.vst3"
+uv run scripts/compare_vital_augmentation.py --baseline-training-dir /path/to/baseline/files --augmented-training-dir /path/to/augmented-training/files --augmented-dataset-dir /path/to/augmented/files
+```
+
+For the large diversified run, start the resumable producer on an unreserved
+2080 Ti and the consumer on the A6000. The producer overlaps CPU rendering with
+GPU feature extraction, writes compact tensor shards, and deletes transient
+presets and audio. The consumer keeps a 25% replay fraction of original
+examples, checkpoints each shard, and deletes consumed shards:
+
+```bash
+uv run scripts/stream_vital_augmentation.py \
+  --dataset-dir /path/to/augmented/files \
+  --reference-training-dir /path/to/augmented-training/files \
+  --vital-vst3 "$HOME/.vst3/Vital.vst3" \
+  --feature-gpu-uuid GPU-a3d54441-08da-ed66-fa0f-6aaaaf97baea
+
+uv run scripts/train_vital_stream_transformer.py \
+  --stream-dir /path/to/stream/files \
+  --reference-dataset-dir /path/to/augmented/files \
+  --reference-training-dir /path/to/augmented-training/files \
+  --vital-vst3 "$HOME/.vst3/Vital.vst3"
+
+uv run scripts/compare_vital_stream_scale.py \
+  --baseline-training-dir /path/to/baseline/files \
+  --four-variant-training-dir /path/to/augmented-training/files \
+  --stream-training-dir /path/to/stream-training/files
+```
+
+The latest investigation and training report are available at
+`/vital-investigation`, `/vital-transformer`, `/vital-augmentation`, and
+`/vital-stream-scale` in the output gallery.

@@ -19,18 +19,23 @@ EXPECTED_ARCHIVE_BYTES: Final[int] = 1_326_243_416
 ARCHIVE_NAME: Final[str] = "Jeks-Vital-Presets.7z"
 
 
-def download_archive(destination: Path) -> None:
-    partial = destination.with_suffix(destination.suffix + ".partial")
-    with httpx.stream(
-        "GET",
-        SOURCE_URL,
+def download_archive(destination: Path, partial: Path) -> None:
+    received_bytes = partial.stat().st_size if partial.exists() else 0
+    headers = {"Range": f"bytes={received_bytes}-"} if received_bytes else {}
+    transport = httpx.HTTPTransport(local_address="0.0.0.0")
+    with httpx.Client(
+        transport=transport,
         follow_redirects=True,
         timeout=None,
-    ) as response:
-        response.raise_for_status()
-        with partial.open("wb") as output:
-            for chunk in response.iter_bytes(chunk_size=1024 * 1024):
-                output.write(chunk)
+    ) as client:
+        with client.stream("GET", SOURCE_URL, headers=headers) as response:
+            response.raise_for_status()
+            if received_bytes and response.status_code != httpx.codes.PARTIAL_CONTENT:
+                raise ValueError("Preset archive server did not honor the resume range")
+            mode = "ab" if received_bytes else "wb"
+            with partial.open(mode) as output:
+                for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                    output.write(chunk)
 
     received_bytes = partial.stat().st_size
     if received_bytes != EXPECTED_ARCHIVE_BYTES:
@@ -51,6 +56,7 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
     category_root = repo_root / "data" / "external" / "Vital Presets"
     pack_root = category_root / "Jeks Vital Presets"
+    partial_archive = category_root / f".{ARCHIVE_NAME}.partial"
 
     if pack_root.exists():
         raise FileExistsError(
@@ -64,7 +70,7 @@ def main() -> None:
         files_dir = staged_pack / "files"
         archive_path = archive_dir / ARCHIVE_NAME
         archive_dir.mkdir()
-        download_archive(archive_path)
+        download_archive(archive_path, partial_archive)
 
         with py7zr.SevenZipFile(archive_path, mode="r") as archive:
             names = archive.getnames()
