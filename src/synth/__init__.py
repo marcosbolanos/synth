@@ -1,3 +1,12 @@
+from synth.gallery_manifest import (
+    GalleryArtifact,
+    GalleryArtifactKind,
+    GalleryArtifactSource,
+    GalleryManifest,
+    publish_gallery_run,
+    repository_relative_output_path,
+    write_gallery_manifest,
+)
 from synth.models import (
     VitalControlName,
     VitalModulationSource,
@@ -23,6 +32,10 @@ from synth.vital import VitalPluginIdentity, VitalRenderConfig, VitalRenderer
 from synth.vital_runtime import VitalRuntime
 
 __all__ = [
+    "GalleryArtifact",
+    "GalleryArtifactKind",
+    "GalleryArtifactSource",
+    "GalleryManifest",
     "VitalControlName",
     "VitalModulationSource",
     "VitalPreset",
@@ -42,4 +55,7 @@ __all__ = [
     "NvidiaGpu",
     "pin_a6000",
     "pin_gpu",
+    "publish_gallery_run",
+    "repository_relative_output_path",
+    "write_gallery_manifest",
 ]

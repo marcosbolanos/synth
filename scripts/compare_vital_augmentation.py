@@ -10,7 +10,13 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from synth import A6000_UUID, create_output_directory, pin_a6000
+from synth import (
+    A6000_UUID,
+    create_output_directory,
+    pin_a6000,
+    publish_gallery_run,
+    repository_relative_output_path,
+)
 
 
 GENERATOR_NAME = "compare_vital_augmentation_v1"
@@ -39,6 +45,19 @@ def main() -> None:
     from synth.audio_features import AudioFeatureKind, extract_feature, read_render
 
     args = parse_args()
+    repo_root = Path(__file__).resolve().parent.parent
+
+    def portable(path: Path) -> str:
+        return str(repository_relative_output_path(repo_root, path))
+
+    def training_reference(root: Path, value: str) -> Path:
+        path = Path(value)
+        if path.is_absolute():
+            return path
+        if path.parts[:2] == ("data", "outputs"):
+            return repo_root / path
+        return root / path
+
     baseline = args.baseline_training_dir.resolve(strict=True)
     augmented = args.augmented_training_dir.resolve(strict=True)
     dataset = args.augmented_dataset_dir.resolve(strict=True)
@@ -66,7 +85,9 @@ def main() -> None:
         for digest in sorted(baseline_comparisons):
             baseline_item = baseline_comparisons[digest]
             augmented_item = augmented_comparisons[digest]
-            source = read_render(augmented / augmented_item["input_audio"]).to("cuda")
+            source = read_render(
+                training_reference(augmented, augmented_item["input_audio"])
+            ).to("cuda")
             source_mel = extract_feature(source, AudioFeatureKind.LOG_MEL)
             source_stft = extract_feature(source, AudioFeatureKind.MULTI_STFT)
 
@@ -75,7 +96,9 @@ def main() -> None:
                 ("baseline", baseline, baseline_item),
                 ("augmented", augmented, augmented_item),
             ):
-                predicted = read_render(root / item["output_audio"]).to("cuda")
+                predicted = read_render(
+                    training_reference(root, item["output_audio"])
+                ).to("cuda")
                 predicted_mel = extract_feature(predicted, AudioFeatureKind.LOG_MEL)
                 predicted_stft = extract_feature(predicted, AudioFeatureKind.MULTI_STFT)
                 distances[name] = float(
@@ -89,25 +112,35 @@ def main() -> None:
                     "pack": augmented_item["pack"],
                     "family": augmented_item["family"],
                     "split": augmented_item["split"],
-                    "input_audio": str((augmented / augmented_item["input_audio"]).resolve()),
-                    "baseline_output_audio": str(
-                        (baseline / baseline_item["output_audio"]).resolve()
+                    "input_audio": portable(
+                        training_reference(augmented, augmented_item["input_audio"])
                     ),
-                    "augmented_output_audio": str(
-                        (augmented / augmented_item["output_audio"]).resolve()
+                    "baseline_output_audio": portable(
+                        training_reference(baseline, baseline_item["output_audio"])
                     ),
-                    "baseline_preset": str(
-                        (baseline / baseline_item["predicted_preset"]).resolve()
+                    "augmented_output_audio": portable(
+                        training_reference(augmented, augmented_item["output_audio"])
                     ),
-                    "augmented_preset": str(
-                        (augmented / augmented_item["predicted_preset"]).resolve()
+                    "baseline_preset": portable(
+                        training_reference(
+                            baseline, baseline_item["predicted_preset"]
+                        )
+                    ),
+                    "augmented_preset": portable(
+                        training_reference(
+                            augmented, augmented_item["predicted_preset"]
+                        )
                     ),
                     "baseline_distance": distances["baseline"],
                     "augmented_distance": distances["augmented"],
                 }
             )
 
-    output = create_output_directory(Path(__file__).resolve().parent.parent, GENERATOR_NAME)
+    output = create_output_directory(repo_root, GENERATOR_NAME)
+    sound_plot = output / "test_sound_loss_comparison.png"
+    distance_plot = output / "paired_rendered_distance.png"
+    report_path = output / "augmentation_demo.json"
+    comparisons_path = output / "comparisons.json"
     baseline_metrics = metric_rows(baseline / "metrics.csv")
     augmented_metrics = metric_rows(augmented / "metrics.csv")
     figure, axis = plt.subplots(figsize=(8, 4.5))
@@ -126,7 +159,7 @@ def main() -> None:
     axis.set_title("Untouched test-set learning curves")
     axis.legend()
     figure.tight_layout()
-    figure.savefig(output / "test_sound_loss_comparison.png", dpi=160)
+    figure.savefig(sound_plot, dpi=160)
     plt.close(figure)
 
     figure, axis = plt.subplots(figsize=(8, 4.5))
@@ -156,7 +189,7 @@ def main() -> None:
     axis.set_title("Paired listening-set reconstruction")
     axis.legend()
     figure.tight_layout()
-    figure.savefig(output / "paired_rendered_distance.png", dpi=160)
+    figure.savefig(distance_plot, dpi=160)
     plt.close(figure)
 
     def mean_distance(name: str, split: str) -> float:
@@ -196,16 +229,56 @@ def main() -> None:
         "augmented_train_wins": augmented_wins("train"),
         "augmented_test_wins": augmented_wins("test"),
         "plots": [
-            "test_sound_loss_comparison.png",
-            "paired_rendered_distance.png",
+            portable(sound_plot),
+            portable(distance_plot),
         ],
-        "comparisons": "comparisons.json",
+        "comparisons": str(comparisons_path.relative_to(repo_root)),
     }
-    (output / "augmentation_demo.json").write_text(
+    report_path.write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"
     )
-    (output / "comparisons.json").write_text(
+    comparisons_path.write_text(
         json.dumps(comparisons, indent=2) + "\n", encoding="utf-8"
+    )
+    comparison_sources = tuple(
+        source
+        for item in comparisons
+        for source in (
+            (repo_root / item["input_audio"], "audio", "input audio"),
+            (
+                repo_root / item["baseline_output_audio"],
+                "audio",
+                "baseline reconstruction",
+            ),
+            (
+                repo_root / item["augmented_output_audio"],
+                "audio",
+                "augmented reconstruction",
+            ),
+            (
+                repo_root / item["baseline_preset"],
+                "preset",
+                "baseline predicted preset",
+            ),
+            (
+                repo_root / item["augmented_preset"],
+                "preset",
+                "augmented predicted preset",
+            ),
+        )
+    )
+    publish_gallery_run(
+        repo_root,
+        output,
+        GENERATOR_NAME,
+        "/vital-augmentation",
+        (
+            (report_path, "json", "augmentation report"),
+            (comparisons_path, "json", "comparison index"),
+            (sound_plot, "image", "test sound loss comparison"),
+            (distance_plot, "image", "paired rendered distance"),
+            *comparison_sources,
+        ),
     )
     print(output)
 

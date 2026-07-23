@@ -1,0 +1,11 @@
+[remote]
+host = "lamsade"
+repo = "/home/lamsade/mbolanos/code/synth"
+
+[local]
+repo = ".."
+sync_webui = true
+
+[selection]
+latest_manifests = 5
+manifest_glob = "data/outputs/*/files/gallery_manifest.json"

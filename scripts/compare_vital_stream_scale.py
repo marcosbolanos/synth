@@ -10,7 +10,13 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from synth import A6000_UUID, create_output_directory, pin_a6000
+from synth import (
+    A6000_UUID,
+    create_output_directory,
+    pin_a6000,
+    publish_gallery_run,
+    repository_relative_output_path,
+)
 
 
 GENERATOR_NAME = "compare_vital_stream_scale_v1"
@@ -39,6 +45,19 @@ def main() -> None:
     from synth.audio_features import AudioFeatureKind, extract_feature, read_render
 
     args = parse_args()
+    repo_root = Path(__file__).resolve().parent.parent
+
+    def portable(path: Path) -> str:
+        return str(repository_relative_output_path(repo_root, path))
+
+    def training_reference(root: Path, value: str) -> Path:
+        path = Path(value)
+        if path.is_absolute():
+            return path
+        if path.parts[:2] == ("data", "outputs"):
+            return repo_root / path
+        return root / path
+
     roots = {
         "baseline": args.baseline_training_dir.resolve(strict=True),
         "four_variant": args.four_variant_training_dir.resolve(strict=True),
@@ -73,14 +92,16 @@ def main() -> None:
         for digest in sorted(manifests["stream"]):
             stream_item = manifests["stream"][digest]
             source = read_render(
-                roots["stream"] / stream_item["input_audio"]
+                training_reference(roots["stream"], stream_item["input_audio"])
             ).to("cuda")
             source_mel = extract_feature(source, AudioFeatureKind.LOG_MEL)
             source_stft = extract_feature(source, AudioFeatureKind.MULTI_STFT)
             distances = {}
             for name, root in roots.items():
                 item = manifests[name][digest]
-                predicted = read_render(root / item["output_audio"]).to("cuda")
+                predicted = read_render(
+                    training_reference(root, item["output_audio"])
+                ).to("cuda")
                 predicted_mel = extract_feature(predicted, AudioFeatureKind.LOG_MEL)
                 predicted_stft = extract_feature(predicted, AudioFeatureKind.MULTI_STFT)
                 distances[name] = float(
@@ -94,18 +115,24 @@ def main() -> None:
                     "pack": stream_item["pack"],
                     "family": stream_item["family"],
                     "split": stream_item["split"],
-                    "input_audio": str(
-                        (roots["stream"] / stream_item["input_audio"]).resolve()
+                    "input_audio": portable(
+                        training_reference(
+                            roots["stream"], stream_item["input_audio"]
+                        )
                     ),
                     **{
-                        f"{name}_output_audio": str(
-                            (root / manifests[name][digest]["output_audio"]).resolve()
+                        f"{name}_output_audio": portable(
+                            training_reference(
+                                root, manifests[name][digest]["output_audio"]
+                            )
                         )
                         for name, root in roots.items()
                     },
                     **{
-                        f"{name}_preset": str(
-                            (root / manifests[name][digest]["predicted_preset"]).resolve()
+                        f"{name}_preset": portable(
+                            training_reference(
+                                root, manifests[name][digest]["predicted_preset"]
+                            )
                         )
                         for name, root in roots.items()
                     },
@@ -116,7 +143,11 @@ def main() -> None:
                 }
             )
 
-    output = create_output_directory(Path(__file__).resolve().parent.parent, GENERATOR_NAME)
+    output = create_output_directory(repo_root, GENERATOR_NAME)
+    sound_plot = output / "scale_test_sound_loss.png"
+    distance_plot = output / "scale_paired_rendered_distance.png"
+    report_path = output / "stream_scale_demo.json"
+    comparisons_path = output / "comparisons.json"
     curves = {
         "baseline": metrics(roots["baseline"] / "metrics.csv"),
         "four_variant": metrics(roots["four_variant"] / "metrics.csv"),
@@ -147,7 +178,7 @@ def main() -> None:
     axis.set_title("Augmentation scale comparison")
     axis.legend()
     figure.tight_layout()
-    figure.savefig(output / "scale_test_sound_loss.png", dpi=160)
+    figure.savefig(sound_plot, dpi=160)
     plt.close(figure)
 
     figure, axis = plt.subplots(figsize=(8, 4.5))
@@ -175,7 +206,7 @@ def main() -> None:
     axis.set_title("Paired real-Vital reconstruction")
     axis.legend()
     figure.tight_layout()
-    figure.savefig(output / "scale_paired_rendered_distance.png", dpi=160)
+    figure.savefig(distance_plot, dpi=160)
     plt.close(figure)
 
     def mean_distance(name: str, split: str) -> float:
@@ -230,16 +261,52 @@ def main() -> None:
         "stream_train_wins_over_four_variant": stream_wins("train"),
         "stream_test_wins_over_four_variant": stream_wins("test"),
         "plots": [
-            "scale_test_sound_loss.png",
-            "scale_paired_rendered_distance.png",
+            portable(sound_plot),
+            portable(distance_plot),
         ],
-        "comparisons": "comparisons.json",
+        "comparisons": str(comparisons_path.relative_to(repo_root)),
     }
-    (output / "stream_scale_demo.json").write_text(
+    report_path.write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"
     )
-    (output / "comparisons.json").write_text(
+    comparisons_path.write_text(
         json.dumps(comparisons, indent=2) + "\n", encoding="utf-8"
+    )
+    comparison_sources = tuple(
+        source
+        for item in comparisons
+        for source in (
+            (repo_root / item["input_audio"], "audio", "input audio"),
+            *(
+                (
+                    repo_root / item[f"{name}_output_audio"],
+                    "audio",
+                    f"{name} reconstruction",
+                )
+                for name in roots
+            ),
+            *(
+                (
+                    repo_root / item[f"{name}_preset"],
+                    "preset",
+                    f"{name} predicted preset",
+                )
+                for name in roots
+            ),
+        )
+    )
+    publish_gallery_run(
+        repo_root,
+        output,
+        GENERATOR_NAME,
+        "/vital-stream-scale",
+        (
+            (report_path, "json", "stream scale report"),
+            (comparisons_path, "json", "comparison index"),
+            (sound_plot, "image", "test sound loss comparison"),
+            (distance_plot, "image", "paired rendered distance"),
+            *comparison_sources,
+        ),
     )
     print(output)
 

@@ -38,6 +38,16 @@ interfaces:
 uv run python -m webui.app --host 100.119.77.112 --port 8765
 ```
 
+Pull completed visualization artifacts from the configured compute host:
+
+```bash
+uv run scripts/pull_remote_outputs.py
+```
+
+Edit `scripts/pull_remote_outputs.toml` to change the host, repository paths, or
+number of recent manifests. Producers publish a run only after writing its
+typed `gallery_manifest.json`.
+
 ## External Vital presets
 
 Download and safely extract the community-maintained Jek's Vital Presets

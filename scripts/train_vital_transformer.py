@@ -17,7 +17,14 @@ from safetensors.torch import load_file, save_file
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-from synth import A6000_UUID, VitalRuntime, create_output_directory, pin_a6000
+from synth import (
+    A6000_UUID,
+    VitalRuntime,
+    create_output_directory,
+    pin_a6000,
+    publish_gallery_run,
+    repository_relative_output_path,
+)
 
 
 BASE_GENERATOR_NAME = "train_vital_transformer_v1"
@@ -84,6 +91,11 @@ def main() -> None:
     from synth.preset_representation import ControlStatistics, load_presets
 
     args = parse_args()
+    repo_root = Path(__file__).resolve().parent.parent
+
+    def portable(path: Path) -> str:
+        return str(repository_relative_output_path(repo_root, path))
+
     torch.manual_seed(SEED)
     np.random.seed(SEED)
     device = torch.device("cuda:0")
@@ -170,7 +182,7 @@ def main() -> None:
     training_audio_np = audio_scaler.transform(training_audio_np).astype(np.float32)
     test_audio_np = audio_scaler.transform(test_audio_np).astype(np.float32)
 
-    output = create_output_directory(Path(__file__).resolve().parent.parent, generator_name)
+    output = create_output_directory(repo_root, generator_name)
     checkpoints = output / "checkpoints"
     checkpoints.mkdir()
     control_statistics_path = output / "control_statistics.json"
@@ -408,6 +420,9 @@ def main() -> None:
     plt.close(figure)
 
     report_path = output / "training_report.json"
+    comparisons_path = output / "comparisons.json"
+    loss_plot = output / "loss.png"
+    surrogate_plot = output / "surrogate_loss.png"
     report = {
         "generator": generator_name,
         "status": "rendering_comparisons",
@@ -427,8 +442,8 @@ def main() -> None:
         "surrogate_epochs": args.surrogate_epochs,
         "training_seconds": time.monotonic() - started,
         "best_test_sound_loss": best_test,
-        "plots": ["loss.png", "surrogate_loss.png"],
-        "comparisons": "comparisons.json",
+        "plots": [portable(loss_plot), portable(surrogate_plot)],
+        "comparisons": str(comparisons_path.relative_to(repo_root)),
     }
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
@@ -471,13 +486,13 @@ def main() -> None:
                     "family": row["evaluation_family"],
                     "split": split,
                     "template_sha256": template_rows[template_index]["preset_sha256"],
-                    "input_audio": str(input_audio.relative_to(output)),
-                    "output_audio": str(output_audio.relative_to(output)),
-                    "predicted_preset": str(preset_path.relative_to(output)),
+                    "input_audio": portable(input_audio),
+                    "output_audio": portable(output_audio),
+                    "predicted_preset": portable(preset_path),
                 }
             )
 
-    runtime = VitalRuntime.from_repo_root(Path(__file__).resolve().parent.parent)
+    runtime = VitalRuntime.from_repo_root(repo_root)
     worker = Path(__file__).resolve().parent / "render_vital_preset_worker.py"
     plugin = args.vital_vst3.resolve(strict=True)
 
@@ -499,12 +514,38 @@ def main() -> None:
         for future in as_completed(futures):
             future.result()
 
-    (output / "comparisons.json").write_text(
+    comparisons_path.write_text(
         json.dumps(comparison_manifest, indent=2) + "\n", encoding="utf-8"
     )
     report["status"] = "complete"
     report["training_seconds"] = time.monotonic() - started
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    comparison_sources = tuple(
+        source
+        for item in comparison_manifest
+        for source in (
+            (repo_root / item["input_audio"], "audio", "input audio"),
+            (repo_root / item["output_audio"], "audio", "predicted audio"),
+            (
+                repo_root / item["predicted_preset"],
+                "preset",
+                "predicted preset",
+            ),
+        )
+    )
+    publish_gallery_run(
+        repo_root,
+        output,
+        generator_name,
+        "/vital-transformer",
+        (
+            (report_path, "json", "training report"),
+            (comparisons_path, "json", "comparison index"),
+            (loss_plot, "image", "training loss"),
+            (surrogate_plot, "image", "surrogate loss"),
+            *comparison_sources,
+        ),
+    )
     print(output)
 
 

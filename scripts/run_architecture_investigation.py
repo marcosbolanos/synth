@@ -13,7 +13,10 @@ from safetensors.torch import load_file
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-from synth import create_output_directory
+from synth import (
+    create_output_directory,
+    publish_gallery_run,
+)
 from synth.audio_features import AudioFeatureKind
 from synth.preset_representation import CONTROL_NAMES
 
@@ -131,7 +134,10 @@ def main() -> None:
             "and asset-dominated serialized presets."
         ),
     }
-    output = create_output_directory(Path(__file__).resolve().parent.parent, GENERATOR_NAME)
+    repo_root = Path(__file__).resolve().parent.parent
+    output = create_output_directory(repo_root, GENERATOR_NAME)
+    report_path = output / "architecture_investigation.json"
+    plot_path = output / "audio_encoding_comparison.png"
     report = {
         "generator": GENERATOR_NAME,
         "dataset": str(dataset),
@@ -139,18 +145,29 @@ def main() -> None:
         "training_examples": len(train),
         "input_results": results,
         "recommendation": recommendation,
+        "plot": str(plot_path.relative_to(repo_root)),
     }
-    (output / "architecture_investigation.json").write_text(
-        json.dumps(report, indent=2) + "\n", encoding="utf-8"
-    )
     figure, axis = plt.subplots(figsize=(8, 4.5))
     names = list(results)
     axis.bar(names, [results[name]["combined_sound_distance"] for name in names])
     axis.set_ylabel("development retrieval sound distance")
     axis.set_title("Audio encoding bake-off")
     figure.tight_layout()
-    figure.savefig(output / "audio_encoding_comparison.png", dpi=160)
+    figure.savefig(plot_path, dpi=160)
     plt.close(figure)
+    report_path.write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
+    publish_gallery_run(
+        repo_root,
+        output,
+        GENERATOR_NAME,
+        "/vital-investigation",
+        (
+            (report_path, "json", "architecture report"),
+            (plot_path, "image", "audio encoding comparison"),
+        ),
+    )
     print(output)
 
 

@@ -10,7 +10,13 @@ from pathlib import Path
 import numpy as np
 from safetensors.torch import load_file, save_file
 
-from synth import A6000_UUID, VitalRuntime, pin_a6000
+from synth import (
+    A6000_UUID,
+    VitalRuntime,
+    pin_a6000,
+    publish_gallery_run,
+    repository_relative_output_path,
+)
 
 
 SEED = 20_260_722
@@ -42,6 +48,17 @@ def main() -> None:
     from synth.preset_representation import ControlStatistics, load_presets
 
     args = parse_args()
+    repo_root = Path(__file__).resolve().parent.parent
+
+    def portable(path: Path) -> str:
+        return str(repository_relative_output_path(repo_root, path))
+
+    def local_reference(value: str) -> Path:
+        path = Path(value)
+        if path.parts[:2] == ("data", "outputs"):
+            return repo_root / path
+        return training / path
+
     torch.manual_seed(SEED)
     dataset = args.dataset_dir.resolve(strict=True)
     training = args.training_dir.resolve(strict=True)
@@ -69,7 +86,7 @@ def main() -> None:
     config = AudioToPresetConfig.model_validate_json((training / "model_config.json").read_text())
     model = AudioToPresetTransformer(config).to("cuda")
     model.load_state_dict(load_file(training / "checkpoints" / "best.safetensors", device="cuda"))
-    runtime = VitalRuntime.from_repo_root(Path(__file__).resolve().parent.parent)
+    runtime = VitalRuntime.from_repo_root(repo_root)
     worker = Path(__file__).resolve().parent / "render_vital_batch_worker.py"
     plugin = args.vital_vst3.resolve(strict=True)
 
@@ -248,9 +265,9 @@ def main() -> None:
                     "family": row["evaluation_family"],
                     "split": row["split"],
                     "template_sha256": train_rows[template_index]["preset_sha256"],
-                    "input_audio": str(input_audio.relative_to(training)),
-                    "output_audio": str(output_audio.relative_to(training)),
-                    "predicted_preset": str(preset_path.relative_to(training)),
+                    "input_audio": portable(input_audio),
+                    "output_audio": portable(output_audio),
+                    "predicted_preset": portable(preset_path),
                 }
             )
     final_root = training / "final_preference_renders"
@@ -258,8 +275,8 @@ def main() -> None:
     render_tasks(final_render_tasks, final_root)
     with torch.inference_mode():
         for item in comparison_manifest:
-            source = read_render(training / str(item["input_audio"])).to("cuda")
-            predicted = read_render(training / str(item["output_audio"])).to("cuda")
+            source = read_render(repo_root / str(item["input_audio"])).to("cuda")
+            predicted = read_render(repo_root / str(item["output_audio"])).to("cuda")
             source_mel = extract_feature(source, AudioFeatureKind.LOG_MEL)
             predicted_mel = extract_feature(predicted, AudioFeatureKind.LOG_MEL)
             source_stft = extract_feature(source, AudioFeatureKind.MULTI_STFT)
@@ -267,7 +284,8 @@ def main() -> None:
             item["log_mel_mse"] = float((source_mel - predicted_mel).square().mean())
             item["multi_stft_mse"] = float((source_stft - predicted_stft).square().mean())
             item["sound_distance"] = item["log_mel_mse"] + item["multi_stft_mse"]
-    (training / "comparisons.json").write_text(
+    comparisons_path = training / "comparisons.json"
+    comparisons_path.write_text(
         json.dumps(comparison_manifest, indent=2) + "\n", encoding="utf-8"
     )
 
@@ -293,7 +311,8 @@ def main() -> None:
     preference_axis.set_title("Real-render preference separation")
     preference_axis.legend()
     preference_figure.tight_layout()
-    preference_figure.savefig(training / "preference_distance.png", dpi=160)
+    preference_plot = training / "preference_distance.png"
+    preference_figure.savefig(preference_plot, dpi=160)
     plt.close(preference_figure)
 
     figure, axis = plt.subplots(figsize=(8, 4.5))
@@ -307,7 +326,8 @@ def main() -> None:
     axis.set_ylabel("log-mel + multi-STFT MSE")
     axis.set_title("Real Vital-rendered reconstruction distance")
     figure.tight_layout()
-    figure.savefig(training / "comparison_sound_distance.png", dpi=160)
+    distance_plot = training / "comparison_sound_distance.png"
+    figure.savefig(distance_plot, dpi=160)
     plt.close(figure)
 
     report_path = training / "training_report.json"
@@ -316,8 +336,8 @@ def main() -> None:
     report["preference_checkpoint"] = f"checkpoints/preference_round_{args.rounds}.safetensors"
     report["plots"] = [
         *report["plots"],
-        "preference_distance.png",
-        "comparison_sound_distance.png",
+        portable(preference_plot),
+        portable(distance_plot),
     ]
     report["mean_train_rendered_sound_distance"] = float(np.mean(train_scores))
     report["mean_test_rendered_sound_distance"] = float(np.mean(test_scores))
@@ -325,6 +345,35 @@ def main() -> None:
     report["gpu"] = gpu.model_dump()
     report["status"] = "complete"
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    comparison_sources = tuple(
+        source
+        for item in comparison_manifest
+        for source in (
+            (repo_root / item["input_audio"], "audio", "input audio"),
+            (repo_root / item["output_audio"], "audio", "predicted audio"),
+            (
+                repo_root / item["predicted_preset"],
+                "preset",
+                "predicted preset",
+            ),
+        )
+    )
+    plot_sources = tuple(
+        (local_reference(str(path)), "image", "training plot")
+        for path in report["plots"]
+    )
+    publish_gallery_run(
+        repo_root,
+        training,
+        str(report["generator"]),
+        "/vital-transformer",
+        (
+            (report_path, "json", "training report"),
+            (comparisons_path, "json", "comparison index"),
+            *plot_sources,
+            *comparison_sources,
+        ),
+    )
 
 
 if __name__ == "__main__":
