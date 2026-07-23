@@ -102,7 +102,7 @@ class AudioComparison:
 
 
 def output_file(path: Path) -> OutputFile:
-    local_path = path
+    local_path = REPO_ROOT / path if not path.is_absolute() else path
     if path.is_absolute() and not path.is_relative_to(REPO_ROOT):
         output_marker = ("data", "outputs")
         marker_index = next(
@@ -120,6 +120,13 @@ def output_file(path: Path) -> OutputFile:
         size_bytes=stat.st_size,
         modified_at=datetime.fromtimestamp(stat.st_mtime).astimezone(),
     )
+
+
+def output_reference(files_directory: Path, value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute() or path.parts[:2] == ("data", "outputs"):
+        return path
+    return files_directory / path
 
 
 def output_runs() -> tuple[OutputRun, ...]:
@@ -270,7 +277,12 @@ def vital_investigation(request: Request) -> HTMLResponse:
             ),
         )
     report = json.loads(manifest_path.read_text(encoding="utf-8"))
-    plot = output_file(manifest_path.parent / "audio_encoding_comparison.png")
+    plot = output_file(
+        output_reference(
+            manifest_path.parent,
+            str(report.get("plot", "audio_encoding_comparison.png")),
+        )
+    )
     return templates.TemplateResponse(
         request=request,
         name="vital_investigation.html",
@@ -302,7 +314,9 @@ def vital_augmentation(request: Request) -> HTMLResponse:
         )
     report = json.loads(manifest_path.read_text(encoding="utf-8"))
     comparisons = json.loads(
-        (manifest_path.parent / report["comparisons"]).read_text(encoding="utf-8")
+        output_reference(
+            manifest_path.parent, str(report["comparisons"])
+        ).read_text(encoding="utf-8")
     )
     prepared = tuple(
         {
@@ -315,7 +329,10 @@ def vital_augmentation(request: Request) -> HTMLResponse:
         }
         for item in comparisons
     )
-    plots = tuple(output_file(manifest_path.parent / name) for name in report["plots"])
+    plots = tuple(
+        output_file(output_reference(manifest_path.parent, str(name)))
+        for name in report["plots"]
+    )
     return templates.TemplateResponse(
         request=request,
         name="vital_augmentation.html",
@@ -349,7 +366,9 @@ def vital_stream_scale(request: Request) -> HTMLResponse:
         )
     report = json.loads(manifest_path.read_text(encoding="utf-8"))
     comparisons = json.loads(
-        (manifest_path.parent / report["comparisons"]).read_text(encoding="utf-8")
+        output_reference(
+            manifest_path.parent, str(report["comparisons"])
+        ).read_text(encoding="utf-8")
     )
     prepared = tuple(
         {
@@ -370,7 +389,10 @@ def vital_stream_scale(request: Request) -> HTMLResponse:
         }
         for item in comparisons
     )
-    plots = tuple(output_file(manifest_path.parent / name) for name in report["plots"])
+    plots = tuple(
+        output_file(output_reference(manifest_path.parent, str(name)))
+        for name in report["plots"]
+    )
     return templates.TemplateResponse(
         request=request,
         name="vital_stream_scale.html",
@@ -382,6 +404,62 @@ def vital_stream_scale(request: Request) -> HTMLResponse:
             plots=plots,
             train_comparisons=tuple(item for item in prepared if item["split"] != "test"),
             test_comparisons=tuple(item for item in prepared if item["split"] == "test"),
+        ),
+    )
+
+
+@app.get("/vital-refiner", response_class=HTMLResponse)
+def vital_refiner(request: Request) -> HTMLResponse:
+    report_path = latest_manifest(
+        "evaluate_vital_refiner_v1_*/files/refiner_report.json"
+    )
+    if report_path is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="empty.html",
+            context=page_context(
+                request,
+                "/vital-refiner",
+                title="Vital latent refiner",
+                message="No completed bounded-search refiner evaluation exists yet.",
+            ),
+        )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    comparisons_path = output_reference(
+        report_path.parent, str(report["comparisons"])
+    )
+    comparisons = json.loads(comparisons_path.read_text(encoding="utf-8"))
+    prepared = tuple(
+        {
+            **item,
+            **{
+                f"{name}_url": output_file(Path(item[f"{name}_audio"])).url
+                for name in ("target", "seed", "old", "cem", "refiner")
+            },
+            "cem_preset_url": output_file(Path(item["cem_preset"])).url,
+            "refiner_preset_url": output_file(Path(item["refiner_preset"])).url,
+        }
+        for item in comparisons
+    )
+    plots = tuple(
+        output_file(output_reference(report_path.parent, str(name)))
+        for name in report["plots"]
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="vital_refiner.html",
+        context=page_context(
+            request,
+            "/vital-refiner",
+            title="Vital latent refiner · bounded iterative search",
+            report=report,
+            plots=plots,
+            train_comparisons=tuple(
+                item for item in prepared if item["split"] != "test"
+            ),
+            test_comparisons=tuple(
+                item for item in prepared if item["split"] == "test"
+            ),
         ),
     )
 
@@ -412,21 +490,32 @@ def vital_training_page(
             ),
         )
     comparisons = json.loads(
-        (manifest_path.parent / report["comparisons"]).read_text(encoding="utf-8")
+        output_reference(
+            manifest_path.parent, str(report["comparisons"])
+        ).read_text(encoding="utf-8")
     )
     prepared = []
     for comparison in comparisons:
         prepared.append(
             {
                 **comparison,
-                "input_url": output_file(manifest_path.parent / comparison["input_audio"]).url,
-                "output_url": output_file(manifest_path.parent / comparison["output_audio"]).url,
+                "input_url": output_file(
+                    output_reference(manifest_path.parent, comparison["input_audio"])
+                ).url,
+                "output_url": output_file(
+                    output_reference(manifest_path.parent, comparison["output_audio"])
+                ).url,
                 "preset_url": output_file(
-                    manifest_path.parent / comparison["predicted_preset"]
+                    output_reference(
+                        manifest_path.parent, comparison["predicted_preset"]
+                    )
                 ).url,
             }
         )
-    plots = tuple(output_file(manifest_path.parent / name) for name in report["plots"])
+    plots = tuple(
+        output_file(output_reference(manifest_path.parent, str(name)))
+        for name in report["plots"]
+    )
     return templates.TemplateResponse(
         request=request,
         name="vital_training.html",

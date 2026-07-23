@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+  <p>Iterative reconstruction pilot · {{ report.architecture }}</p>
+  <div class="summary-grid">
+    <article><div class="metric">{{ "%.4f"|format(report.mean_seed_distance) }}</div><div class="details">retrieval seed</div></article>
+    <article><div class="metric">{{ "%.4f"|format(report.mean_cem_distance) }}</div><div class="details">render-only CEM</div></article>
+    <article><div class="metric">{{ "%.4f"|format(report.mean_refiner_distance) }}</div><div class="details">learned refiner</div></article>
+    <article><div class="metric">{{ report.refiner_wins_over_cem }}/{{ report.comparison_count }}</div><div class="details">refiner wins</div></article>
+  </div>
+</section>
+
+<section class="plot-grid">
+{% for plot in plots %}
+  <article><img src="{{ plot.url }}" alt="{{ plot.relative_path.name }}"></article>
+{% endfor %}
+</section>
+
+{% macro comparison_section(title, items) %}
+<section>
+  <h2>{{ title }}</h2>
+  {% for item in items %}
+  <div class="pair">
+    <h2>{{ item.preset_name }} · {{ item.family }}</h2>
+    <div class="details">seed {{ "%.4f"|format(item.seed_distance) }} · CEM {{ "%.4f"|format(item.cem_distance) }} · refiner {{ "%.4f"|format(item.refiner_distance) }}</div>
+    <div class="comparison comparison-five">
+      <article><h3>Target</h3><audio controls preload="none" src="{{ item.target_url }}"></audio></article>
+      <article><h3>Retrieval seed</h3><audio controls preload="none" src="{{ item.seed_url }}"></audio></article>
+      <article><h3>Old one-shot</h3><audio controls preload="none" src="{{ item.old_url }}"></audio></article>
+      <article><h3>Render-only CEM</h3><audio controls preload="none" src="{{ item.cem_url }}"></audio><div class="preset-link"><a href="{{ item.cem_preset_url }}">preset</a></div></article>
+      <article><h3>Learned refiner</h3><audio controls preload="none" src="{{ item.refiner_url }}"></audio><div class="preset-link"><a href="{{ item.refiner_preset_url }}">preset</a></div></article>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endmacro %}
+
+{{ comparison_section("Training targets", train_comparisons) }}
+{{ comparison_section("Untouched test targets", test_comparisons) }}
+{% endblock %}
