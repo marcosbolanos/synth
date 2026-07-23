@@ -34,6 +34,11 @@ class TransitionPrediction(NamedTuple):
     distances: Tensor
 
 
+class GoalValuePrediction(NamedTuple):
+    distance: Tensor
+    improvement: Tensor
+
+
 class VitalRefiner(nn.Module):
     """Audio-conditioned sparse editor with an action-conditioned latent world model."""
 
@@ -165,3 +170,50 @@ class VitalRefiner(nn.Module):
         if feature.ndim != 4:
             raise ValueError("Expected a four-dimensional audio feature batch")
         return torch.cat((feature.mean(dim=-1), feature.std(dim=-1)), dim=-1).flatten(1)
+
+
+class VitalHybridRefiner(nn.Module):
+    """V1 dynamics and policy plus an ensemble that ranks edits for arbitrary goals."""
+
+    def __init__(self, config: VitalRefinerConfig) -> None:
+        super().__init__()
+        self.config = config
+        self.refiner = VitalRefiner(config)
+        self.goal_trunk = nn.Sequential(
+            nn.Linear(config.width * 4, config.feedforward_width),
+            nn.GELU(),
+            nn.Dropout(config.dropout),
+            nn.Linear(config.feedforward_width, config.width),
+            nn.GELU(),
+        )
+        self.goal_heads = nn.ModuleList(
+            nn.Linear(config.width, 2) for _ in range(config.ensemble_heads)
+        )
+
+    def score_action(
+        self,
+        target_audio_latent: Tensor,
+        current_audio_latent: Tensor,
+        preset_latent: Tensor,
+        action_delta: Tensor,
+        action_mask: Tensor,
+    ) -> GoalValuePrediction:
+        action = self.refiner.action_encoder(
+            torch.cat((action_delta, action_mask.to(action_delta.dtype)), dim=-1)
+        )
+        hidden = self.goal_trunk(
+            torch.cat(
+                (
+                    target_audio_latent,
+                    current_audio_latent,
+                    preset_latent,
+                    action,
+                ),
+                dim=-1,
+            )
+        )
+        values = torch.stack(tuple(head(hidden) for head in self.goal_heads), dim=1)
+        return GoalValuePrediction(
+            distance=values[:, :, 0],
+            improvement=values[:, :, 1],
+        )

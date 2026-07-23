@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 import torch
 
-from synth.models.vital_refiner import VitalRefiner, VitalRefinerConfig
+from synth.models.vital_refiner import (
+    VitalHybridRefiner,
+    VitalRefiner,
+    VitalRefinerConfig,
+)
 
 
 def compact_config() -> VitalRefinerConfig:
@@ -40,3 +44,16 @@ def test_refiner_rejects_wrong_audio_contract() -> None:
     model = VitalRefiner(compact_config())
     with pytest.raises(ValueError, match="Expected audio feature"):
         model.encode_audio(torch.randn(2, 2, 31, 40))
+
+
+def test_hybrid_goal_value_shapes() -> None:
+    config = compact_config()
+    model = VitalHybridRefiner(config)
+    feature = torch.randn(3, 2, 32, 40)
+    controls = torch.randn(3, 17)
+    mask = torch.ones(3, 17, dtype=torch.bool)
+    latent, _ = model.refiner.encode_audio(feature)
+    preset = model.refiner.encode_preset(controls, mask)
+    value = model.score_action(latent, latent, preset, controls, mask)
+    assert value.distance.shape == (3, 3)
+    assert value.improvement.shape == (3, 3)

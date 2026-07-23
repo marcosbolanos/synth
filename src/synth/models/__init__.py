@@ -9,7 +9,11 @@ from synth.models.vital_preset_model import (
     VitalPreset,
     VitalSettings,
 )
-from synth.models.vital_refiner import VitalRefiner, VitalRefinerConfig
+from synth.models.vital_refiner import (
+    VitalHybridRefiner,
+    VitalRefiner,
+    VitalRefinerConfig,
+)
 
 __all__ = [
     "AudioToPresetConfig",
@@ -21,4 +25,5 @@ __all__ = [
     "VitalSettings",
     "VitalRefiner",
     "VitalRefinerConfig",
+    "VitalHybridRefiner",
 ]
