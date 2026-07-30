@@ -438,6 +438,16 @@ def vital_refiner(request: Request) -> HTMLResponse:
             },
             "cem_preset_url": output_file(Path(item["cem_preset"])).url,
             "refiner_preset_url": output_file(Path(item["refiner_preset"])).url,
+            **(
+                {
+                    "hybrid_url": output_file(Path(item["hybrid_audio"])).url,
+                    "hybrid_preset_url": output_file(
+                        Path(item["hybrid_preset"])
+                    ).url,
+                }
+                if "hybrid_audio" in item
+                else {}
+            ),
         }
         for item in comparisons
     )
