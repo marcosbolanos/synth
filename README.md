@@ -46,7 +46,8 @@ uv run scripts/pull_remote_outputs.py
 
 Edit `scripts/pull_remote_outputs.toml` to change the host, repository paths, or
 number of recent manifests. Producers publish a run only after writing its
-typed `gallery_manifest.json`.
+typed `gallery_manifest.json`. A successful verified pull restarts the configured
+gallery service so newly synced routes become live immediately.
 
 ## External Vital presets
 

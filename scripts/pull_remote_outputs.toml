@@ -5,6 +5,7 @@ repo = "/home/lamsade/mbolanos/code/synth"
 [local]
 repo = ".."
 sync_webui = true
+restart_service = "synth-output-gallery.service"
 
 [selection]
 latest_manifests = 5

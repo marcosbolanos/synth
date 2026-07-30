@@ -31,6 +31,7 @@ class LocalConfig(BaseModel):
 
     repo: Path
     sync_webui: bool
+    restart_service: str = Field(pattern=r"^[A-Za-z0-9_.@-]+\.service$")
 
 
 class SelectionConfig(BaseModel):
@@ -157,6 +158,13 @@ def verify(config: PullConfig, manifests: tuple[RemoteManifest, ...]) -> None:
                 raise ValueError(f"SHA-256 mismatch for {artifact.path}")
 
 
+def restart_service(config: PullConfig) -> None:
+    subprocess.run(
+        ["systemctl", "--user", "restart", config.local.restart_service],
+        check=True,
+    )
+
+
 def main() -> None:
     config = load_config()
     manifests = remote_manifests(config)
@@ -168,6 +176,7 @@ def main() -> None:
     pull_files(config, manifests)
     sync_webui(config)
     verify(config, manifests)
+    restart_service(config)
     for remote in manifests:
         print(
             f"{remote.manifest.created_at.isoformat()} "
